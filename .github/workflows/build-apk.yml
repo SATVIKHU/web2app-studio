@@ -30,10 +30,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Generate Project & Inject Code
+      - name: Generate Project & Auto Fix Package
         run: |
           mkdir -p build_app/app/src/main/java/com/satvik/engine
           mkdir -p build_app/app/src/main/res/layout
@@ -42,6 +42,8 @@ jobs:
           cp android/MainActivity.kt build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
           cp android/assets/offline.html build_app/app/src/main/assets/offline.html || true
 
+          # Package line update for compiler
+          sed -i '1s/^package .*/package com.satvik.engine/' build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
           sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
 
           cat << 'EOF' > build_app/settings.gradle
@@ -156,10 +158,11 @@ jobs:
           </RelativeLayout>
           EOF
 
-      - name: Build APK with Gradle
+      - name: Build APK with Gradle Wrapper
         run: |
           cd build_app
-          gradle assembleDebug
+          gradle wrapper
+          ./gradlew assembleDebug
 
       - name: Upload Generated APK Artifact
         uses: actions/upload-artifact@v4
