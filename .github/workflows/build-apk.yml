@@ -30,40 +30,48 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Prepare Workspace Files
-        run: |
-          mkdir -p android/app/src/main/assets
-          cp android/assets/offline.html android/app/src/main/assets/offline.html || true
-          sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' android/MainActivity.kt || true
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
 
-      - name: Build APK with Android Build Action
-        uses: subosito/flutter-action@v2
-        continue-on-error: true
-
-      - name: Create Native Package
+      - name: Generate Clean Android Project
         run: |
           mkdir -p simple_project/app/src/main/java/com/satvik/engine
           mkdir -p simple_project/app/src/main/res/layout
           mkdir -p simple_project/app/src/main/assets
-          
+
+          # Settings file with centralized repositories
           cat << 'EOF' > simple_project/settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = "Web2App"
           include ':app'
           EOF
 
+          # Root build.gradle without duplicate repositories
           cat << 'EOF' > simple_project/build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.1.4'
                   classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'
               }
           }
-          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
+          # App level build.gradle
           cat << 'EOF' > simple_project/app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -84,18 +92,23 @@ jobs:
               }
               kotlinOptions { jvmTarget = '17' }
           }
+
           dependencies {
               implementation 'androidx.core:core-ktx:1.12.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
 
+          # AndroidManifest.xml
           cat << 'EOF' > simple_project/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application
+                  android:allowBackup="true"
                   android:label="${{ github.event.inputs.app_name }}"
+                  android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity android:name="com.satvik.engine.MainActivity" android:exported="true">
                       <intent-filter>
@@ -107,6 +120,7 @@ jobs:
           </manifest>
           EOF
 
+          # Activity Layout
           cat << 'EOF' > simple_project/app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -118,15 +132,18 @@ jobs:
           </RelativeLayout>
           EOF
 
+          # Copy Assets & Code
+          cp android/assets/offline.html simple_project/app/src/main/assets/offline.html || true
           cp android/MainActivity.kt simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
           sed -i '1s/^package .*/package com.satvik.engine/' simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
+          sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
 
-      - name: Run Standalone Gradle Build
+      - name: Build APK with Gradle
         run: |
           cd simple_project
           gradle assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload Generated APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-Release-APK
