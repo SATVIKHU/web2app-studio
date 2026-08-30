@@ -30,8 +30,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
 
       - name: Generate Project & Auto Fix Package
         run: |
@@ -158,11 +160,10 @@ jobs:
           </RelativeLayout>
           EOF
 
-      - name: Build APK with Gradle Wrapper
+      - name: Build APK with Locked Gradle Version
         run: |
           cd build_app
-          gradle wrapper
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Upload Generated APK Artifact
         uses: actions/upload-artifact@v4
