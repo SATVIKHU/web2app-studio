@@ -1,171 +1,88 @@
-name: Build Android APK Engine
+package com.satvik.engine
 
-on:
-  workflow_dispatch:
-    inputs:
-      app_url:
-        description: 'Target Website URL'
-        required: true
-        default: 'https://example.com'
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'PIKACHU'
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.satvik.app'
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import java.security.MessageDigest
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+class MainActivity : AppCompatActivity() {
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    private lateinit var webView: WebView
+    private lateinit var cornerBadge: TextView
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    private val EXPECTED_SIGNATURE_HASH = "BUILD_TIME_GENERATED_HASH"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-      - name: Generate Project & Auto Fix Package
-        run: |
-          mkdir -p build_app/app/src/main/java/com/satvik/engine
-          mkdir -p build_app/app/src/main/res/layout
-          mkdir -p build_app/app/src/main/assets
+        if (!verifyAppSignature()) {
+            finish()
+            return
+        }
 
-          cp android/MainActivity.kt build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
-          cp android/assets/offline.html build_app/app/src/main/assets/offline.html || true
+        setContentView(R.layout.activity_main)
 
-          # Package line update for compiler
-          sed -i '1s/^package .*/package com.satvik.engine/' build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
-          sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' build_app/app/src/main/java/com/satvik/engine/MainActivity.kt
+        webView = findViewById(R.id.webView)
+        cornerBadge = findViewById(R.id.cornerBadge)
 
-          cat << 'EOF' > build_app/settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "Web2App"
-          include ':app'
-          EOF
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
 
-          cat << 'EOF' > build_app/build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.0' apply false
-              id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
-          }
-          EOF
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                webView.loadUrl("file:///android_asset/offline.html")
+            }
+        }
 
-          cat << 'EOF' > build_app/app/build.gradle
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-          }
+        webView.loadUrl("TARGET_APP_URL")
 
-          android {
-              namespace 'com.satvik.engine'
-              compileSdk 34
+        Handler(Looper.getMainLooper()).postDelayed({
+            cornerBadge.animate()
+                .alpha(0.0f)
+                .setDuration(500)
+                .withEndAction { cornerBadge.visibility = View.GONE }
+        }, 3000)
+    }
 
-              defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
+    private fun verifyAppSignature(): Boolean {
+        try {
+            val packageInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+            for (signature in packageInfo.signatures) {
+                val md = MessageDigest.getInstance("SHA-256")
+                md.update(signature.toByteArray())
+                val currentHash = bytesToHex(md.digest())
+                if (EXPECTED_SIGNATURE_HASH == "BUILD_TIME_GENERATED_HASH" || EXPECTED_SIGNATURE_HASH == currentHash) {
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            return false
+        }
+        return false
+    }
 
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-
-          cat << 'EOF' > build_app/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application
-                  android:allowBackup="true"
-                  android:label="${{ github.event.inputs.app_name }}"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity
-                      android:name="com.satvik.engine.MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          cat << 'EOF' > build_app/app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-              <WebView
-                  android:id="@+id/webView"
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent" />
-              <TextView
-                  android:id="@+id/cornerBadge"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:layout_alignParentBottom="true"
-                  android:layout_alignParentEnd="true"
-                  android:layout_margin="12dp"
-                  android:background="#80000000"
-                  android:paddingHorizontal="10dp"
-                  android:paddingVertical="5dp"
-                  android:text="Built via Satvik"
-                  android:textColor="#FFFFFF"
-                  android:textSize="12sp" />
-          </RelativeLayout>
-          EOF
-
-      - name: Build APK with Gradle Wrapper
-        run: |
-          cd build_app
-          gradle wrapper
-          ./gradlew assembleDebug
-
-      - name: Upload Generated APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.inputs.app_name }}-Release-APK
-          path: build_app/app/build/outputs/apk/debug/*.apk
+    private fun bytesToHex(bytes: ByteArray): String {
+        val hexArray = "0123456789ABCDEF".toCharArray()
+        val hexChars = CharArray(bytes.size * 2)
+        for (j in bytes.indices) {
+            val v = bytes[j].toInt() and 0xFF
+            hexChars[j * 2] = hexArray[v ushr 4]
+            hexChars[j * 2 + 1] = hexArray[v and 0x0F]
+        }
+        return String(hexChars)
+    }
+}
