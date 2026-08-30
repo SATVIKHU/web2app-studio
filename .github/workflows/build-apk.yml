@@ -41,7 +41,7 @@ jobs:
           mkdir -p simple_project/app/src/main/res/layout
           mkdir -p simple_project/app/src/main/assets
 
-          # Settings file with centralized repositories
+          # 1. settings.gradle
           cat << 'EOF' > simple_project/settings.gradle
           pluginManagement {
               repositories {
@@ -61,28 +61,40 @@ jobs:
           include ':app'
           EOF
 
-          # Root build.gradle without duplicate repositories
+          # 2. root build.gradle with its own buildscript repositories
           cat << 'EOF' > simple_project/build.gradle
           buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.1.4'
                   classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'
               }
           }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           EOF
 
-          # App level build.gradle
+          # 3. app/build.gradle
           cat << 'EOF' > simple_project/app/build.gradle
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
 
           android {
-              compileSdkVersion 34
+              compileSdk 34
               namespace 'com.satvik.engine'
               defaultConfig {
                   applicationId "${{ github.event.inputs.package_name }}"
-                  minSdkVersion 21
-                  targetSdkVersion 34
+                  minSdk 21
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
@@ -90,16 +102,19 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              kotlinOptions { jvmTarget = '17' }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
           }
 
           dependencies {
               implementation 'androidx.core:core-ktx:1.12.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
-          # AndroidManifest.xml
+          # 4. AndroidManifest.xml
           cat << 'EOF' > simple_project/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -120,7 +135,7 @@ jobs:
           </manifest>
           EOF
 
-          # Activity Layout
+          # 5. Activity Layout
           cat << 'EOF' > simple_project/app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
