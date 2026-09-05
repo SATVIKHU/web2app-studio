@@ -35,7 +35,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Generate Complete Android Project
+      - name: Generate Professional Android Project
         run: |
           mkdir -p simple_project/app/src/main/java/com/satvik/engine
           mkdir -p simple_project/app/src/main/res/layout
@@ -134,7 +134,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 6. MainActivity.kt (Clean, self-contained Kotlin source code)
+          # 6. MainActivity.kt (Suppressed deprecations for flawless compilation)
           cat << 'EOF' > simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
           package com.satvik.engine
 
@@ -154,7 +154,7 @@ jobs:
                   webView.loadUrl("TARGET_APP_URL")
               }
 
-              @Deprecated("Deprecated in Java")
+              @Suppress("DEPRECATION")
               override fun onBackPressed() {
                   val webView = findViewById<WebView>(R.id.webView)
                   if (webView.canGoBack()) {
@@ -166,16 +166,19 @@ jobs:
           }
           EOF
 
-          # Replace placeholder with actual URL input
+          # Replace placeholder with user url
           sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
 
-      - name: Build APK with Gradle
+      - name: Build with Official Gradle Wrapper
         run: |
           cd simple_project
-          gradle assembleDebug --no-daemon
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload Generated APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-Release-APK
           path: simple_project/app/build/outputs/apk/debug/*.apk
+          
