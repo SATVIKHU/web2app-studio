@@ -35,13 +35,13 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Generate Clean Modern Android Project
+      - name: Generate Complete Android Project
         run: |
           mkdir -p simple_project/app/src/main/java/com/satvik/engine
           mkdir -p simple_project/app/src/main/res/layout
           mkdir -p simple_project/app/src/main/assets
 
-          # 1. Modern settings.gradle with plugin declarations
+          # 1. settings.gradle
           cat << 'EOF' > simple_project/settings.gradle
           pluginManagement {
               repositories {
@@ -65,7 +65,7 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Empty root build.gradle (not needed with modern Gradle plugin block)
+          # 2. root build.gradle
           touch simple_project/build.gradle
 
           # 3. app/build.gradle
@@ -134,10 +134,39 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # Copy Assets & Code
-          cp android/assets/offline.html simple_project/app/src/main/assets/offline.html || true
-          cp android/MainActivity.kt simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
-          sed -i '1s/^package .*/package com.satvik.engine/' simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
+          # 6. MainActivity.kt (Clean, self-contained Kotlin source code)
+          cat << 'EOF' > simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
+          package com.satvik.engine
+
+          import android.os.Bundle
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  val webView = findViewById<WebView>(R.id.webView)
+                  webView.settings.javaScriptEnabled = true
+                  webView.webViewClient = WebViewClient()
+                  webView.loadUrl("TARGET_APP_URL")
+              }
+
+              @Deprecated("Deprecated in Java")
+              override fun onBackPressed() {
+                  val webView = findViewById<WebView>(R.id.webView)
+                  if (webView.canGoBack()) {
+                      webView.goBack()
+                  } else {
+                      super.onBackPressed()
+                  }
+              }
+          }
+          EOF
+
+          # Replace placeholder with actual URL input
           sed -i 's|TARGET_APP_URL|${{ github.event.inputs.app_url }}|g' simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
 
       - name: Build APK with Gradle
