@@ -30,12 +30,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK Platforms and Build Tools
+        run: |
+          echo "y" | sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      - name: Generate Professional Android Project
+      - name: Generate Complete Android Project
         run: |
           mkdir -p simple_project/app/src/main/java/com/satvik/engine
           mkdir -p simple_project/app/src/main/res/layout
@@ -130,11 +137,11 @@ jobs:
               <WebView android:id="@+id/webView" android:layout_width="match_parent" android:layout_height="match_parent" />
               <TextView android:id="@+id/cornerBadge" android:layout_width="wrap_content" android:layout_height="wrap_content"
                   android:layout_alignParentBottom="true" android:layout_alignParentEnd="true" android:layout_margin="12dp"
-                  android:background="#80000000" android:padding="6dp" android:text="Built via Satvik" android:textColor="#FFFFFF" />
+                  background="#80000000" android:padding="6dp" android:text="Built via Satvik" android:textColor="#FFFFFF" />
           </RelativeLayout>
           EOF
 
-          # 6. MainActivity.kt (Suppressed deprecations for flawless compilation)
+          # 6. MainActivity.kt
           cat << 'EOF' > simple_project/app/src/main/java/com/satvik/engine/MainActivity.kt
           package com.satvik.engine
 
